@@ -57,7 +57,7 @@ class Server:
                     decrypted_data_bytes = self.cipher_suite.decrypt(encrypted_data_bytes)  # расшифровка байтов
                     data_obj: Folder | File = pickle.loads(decrypted_data_bytes)  # байты в обьект Python
                     if isinstance(data_obj, Folder):
-                        path_folder = Path(self.backup_folder_path, data_obj.relative_path)
+                        path_folder = Path(self.backup_folder_path, client_name, data_obj.relative_path)
 
                         if data_obj.delete and path_folder.exists():
                             try:
@@ -72,8 +72,8 @@ class Server:
                         progress_bar.update(1)
                         continue
 
-                    path_file_folder = Path(self.backup_folder_path, data_obj.relative_path.parent)
-                    file_path = Path(self.backup_folder_path, data_obj.relative_path)
+                    path_file_folder = Path(self.backup_folder_path, client_name, data_obj.relative_path.parent)
+                    file_path = Path(self.backup_folder_path, client_name, data_obj.relative_path)
 
                     if data_obj.delete and file_path.exists():
                         try:
