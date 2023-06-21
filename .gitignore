@@ -1,0 +1,8 @@
+venv/
+__pycache__
+client_state
+*.json
+config.ini
+test.__pycache__
+.flake8
+test.py
