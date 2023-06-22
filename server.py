@@ -39,7 +39,7 @@ class Server:
     def __get_port(self) -> int:
         return int(Config.get_value("server", "port"))
 
-    async def __handle_connection(self, client_socket: socket.socket, client_address: tuple):
+    def __handle_connection(self, client_socket: socket.socket, client_address: tuple):
         logger.info(f"Подключен клиент с адресом: {client_address}")
 
         data = b''
