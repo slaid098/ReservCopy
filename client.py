@@ -148,16 +148,20 @@ class Client:
 
             try:
                 ip, port = self.__get_server_ip(), self.__get_server_port()
-                self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                self.client_socket.connect((ip, port))
+                # self.client_socket = socket.socket()
+                connection = socket.create_connection((ip, port))
+                # self.client_socket.connect((ip, port))
                 self.sended_data_counter += 1  # увеличиваем счётчик, если отправили какие-то файлы или папки на сервер
                 pickled_data = pickle.dumps(data)
                 # encrypted_data = self.cipher_suite.encrypt(pickled_data)  # шифруем данные
                 # base64_bytes = base64.b64encode(pickled_data)
                 # data_dict = {'data': base64_bytes.decode, 'client_name': self.__get_name()}
                 # json_data = json.dumps(data_dict)
-                self.client_socket.send(pickled_data)
-                self.client_socket.close()
+                connection.send(pickled_data)
+                connection.close()
+                # self.client_socket.send(pickled_data)
+                # socket.close()
+                # self.client_socket.close()
                 logger.debug(f"отправил {data.name}")
             except (ConnectionResetError, ConnectionAbortedError) as ex:
                 await self.__sleep_and_message(message=f"Ошибка при отправке данных на сервер: {str(ex)}", error_for_raise=ex)

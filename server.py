@@ -9,7 +9,6 @@ import os
 import shutil
 from datetime import datetime
 import hashlib
-import threading
 
 from loguru import logger
 from cryptography.fernet import Fernet
@@ -26,7 +25,7 @@ class Server:
         self.ip_address = self.__get_local_ip()  # IP-адрес вашего ПК
         self.port = self.__get_port()
         self.backup_folder_path = self.__get_backup_folder_path()
-        self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.server_socket = socket.socket()
 
     def __get_backup_folder_path(self) -> Path:
         return Path(Config.get_value("server", "backup_folder_path"))
@@ -49,7 +48,7 @@ class Server:
     def __get_port(self) -> int:
         return int(Config.get_value("server", "port"))
 
-    def __handle_connection(self, client_socket: socket.socket, client_address: tuple):
+    async def __handle_connection(self, client_socket: socket.socket, client_address: tuple):
         logger.info(f"Подключен клиент с адресом: {client_address}")
         # loop = asyncio.get_running_loop()
 
@@ -136,19 +135,20 @@ class Server:
 
     async def start(self):
         # Привязка сокета к адресу и порту
-        self.server_socket.bind((self.ip_address, self.port))
-        # Прослушивание входящих соединений
-        self.server_socket.listen(1)
+        server = socket.create_server((self.ip_address, self.port))
+        # self.server_socket.bind((self.ip_address, self.port))
+        # # Прослушивание входящих соединений
+        # self.server_socket.listen(1)
         logger.info(f"Сервер запущен на ip {self.ip_address}:{self.port}")
 
         loop = asyncio.get_running_loop()
 
         while True:
-            client_socket, client_address = self.server_socket.accept()
-            # client_socket, client_address = await loop.sock_accept(self.server_socket)
-            # loop.create_task(self.__handle_connection(client_socket, client_address))
-            client_thread = threading.Thread(target=self.__handle_connection, args=(client_socket, client_address))
-            client_thread.start()
+            client_socket, client_address = server.accept()
+            client_socket, client_address = await loop.sock_accept(self.server_socket)
+            loop.create_task(self.__handle_connection(client_socket, client_address))
+            # client_thread = threading.Thread(target=self.__handle_connection, args=(client_socket, client_address))
+            # client_thread.start()
 
 
 if __name__ == "__main__":
