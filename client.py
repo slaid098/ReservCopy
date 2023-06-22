@@ -4,6 +4,8 @@ from pathlib import Path
 from typing import Literal
 import json
 import base64
+import socket
+import hashlib
 
 from loguru import logger
 from cryptography.fernet import Fernet
@@ -20,16 +22,22 @@ class Client:
         self.state_file_path = Path("app_data", "client_state")
         self.state: dict[str, Folder | File] = {}  # type: ignore
         self.__load_state()
-        self.writer = None
-        self.separator = '#'
+        # self.separator = '#'
         self.temp_path_list: list[str] = []  # type: ignore
         self.sended_data_counter = 0
         self.cipher_suite = Fernet(self.__get_encryption_key())
         self.warn_log = True
+        self.client_socket = None
 
     def __get_encryption_key(self) -> bytes:
         key_str = Config.get_value("security", "key")
         return base64.b64decode(key_str.encode('utf-8'))
+
+    def __calculate_hash(self, data: bytes) -> str:
+        # Вычисление хэша SHA-256
+        sha256_hash = hashlib.sha256()
+        sha256_hash.update(data)
+        return sha256_hash.hexdigest()
 
     def __load_state(self) -> None:
         """
@@ -50,8 +58,8 @@ class Client:
             try:
                 # Подключение к серверу
                 ip, port = self.__get_server_ip(), self.__get_server_port()
-                reader, writer = await asyncio.open_connection(ip, port)
-                self.writer = writer
+                # self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                # self.client_socket.connect((ip, port))
                 logger.info(f"[{self.__get_name()}]: подключен к {ip}:{port}")
                 self.warn_log = True
                 break
@@ -99,7 +107,7 @@ class Client:
                 for folder in folders:
                     await self.__send_folder(folder, Path(folder.name))
                 await self.__send_deleted()
-                self.writer.close()
+                # self.client_socket.close()
                 if self.sended_data_counter > 0:
                     logger.info(f'[{self.__get_name()}]: данные отправлены')
                     self.sended_data_counter = 0
@@ -120,7 +128,8 @@ class Client:
             absolute_path=folder_path,
             relative_path=relative_path,
             created=folder_path.stat().st_ctime,
-            changed=folder_path.stat().st_mtime)
+            changed=folder_path.stat().st_mtime,
+            client_name=self.__get_name())
         await self.__send_data_to_server(data=folder_obj)
         self.__add_to_state(folder_obj)
 
@@ -138,14 +147,18 @@ class Client:
         if self.__need_synchronize(data):
 
             try:
+                ip, port = self.__get_server_ip(), self.__get_server_port()
+                self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                self.client_socket.connect((ip, port))
                 self.sended_data_counter += 1  # увеличиваем счётчик, если отправили какие-то файлы или папки на сервер
                 pickled_data = pickle.dumps(data)
-                encrypted_data = self.cipher_suite.encrypt(pickled_data)  # шифруем данные
-                base64_data = base64.b64encode(encrypted_data).decode()
-                data_dict = {'data': base64_data, 'client_name': self.__get_name()}
-                json_data = json.dumps(data_dict)
-                self.writer.write(json_data.encode() + self.separator.encode())
-                await self.writer.drain()
+                # encrypted_data = self.cipher_suite.encrypt(pickled_data)  # шифруем данные
+                # base64_bytes = base64.b64encode(pickled_data)
+                # data_dict = {'data': base64_bytes.decode, 'client_name': self.__get_name()}
+                # json_data = json.dumps(data_dict)
+                self.client_socket.send(pickled_data)
+                self.client_socket.close()
+                logger.debug(f"отправил {data.name}")
             except (ConnectionResetError, ConnectionAbortedError) as ex:
                 await self.__sleep_and_message(message=f"Ошибка при отправке данных на сервер: {str(ex)}", error_for_raise=ex)
 
@@ -160,7 +173,8 @@ class Client:
                 relative_path=relative_folder_path / file_path.name,
                 data=file_data,
                 created=file_path.stat().st_ctime,
-                changed=file_path.stat().st_mtime)
+                changed=file_path.stat().st_mtime,
+                client_name=self.__get_name())
             await self.__send_data_to_server(data=file_obj)
             self.__add_to_state(file_obj)
         except FileNotFoundError as e:
