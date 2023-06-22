@@ -124,14 +124,14 @@ class Client:
 
             try:
                 ip, port = self.__get_server_ip(), self.__get_server_port()
-                connection = socket.create_connection((ip, port))
+                connection = socket.create_connection((ip, port), timeout=10)
                 self.sended_data_counter += 1  # увеличиваем счётчик, если отправили какие-то файлы или папки на сервер
                 pickled_data = pickle.dumps(data)
                 encrypted_data = self.cipher_suite.encrypt(pickled_data)  # шифруем данные
                 connection.send(encrypted_data)
                 connection.close()
                 logger.debug(f"отправил {data.name}")
-            except (ConnectionResetError, ConnectionAbortedError, ConnectionRefusedError, ConnectionError) as ex:
+            except (ConnectionResetError, ConnectionAbortedError, ConnectionRefusedError, ConnectionError, TimeoutError) as ex:
                 await self.__sleep_and_message(message=f"Ошибка при отправке данных на сервер: {str(ex)}", error_for_raise=ex)
 
     async def __send_file(self, file_path: Path, relative_folder_path: Path) -> None:
