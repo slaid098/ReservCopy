@@ -10,6 +10,7 @@ class Folder:
     created: float
     changed: float
     delete: bool = False
+    client_name: str = '0'
 
 
 @dataclass
@@ -21,3 +22,4 @@ class File:
     created: float
     changed: float
     delete: bool = False
+    client_name: str = '0'
