@@ -43,7 +43,6 @@ class Client:
         while True:
             self.warn_log = True
             await self.__send_data()
-            await asyncio.sleep(self.__get_sleep("between_synchronize"))
 
     def __get_server_ip(self) -> str:
         return Config.get_value("client", "server_ip", cache=False)
@@ -90,8 +89,9 @@ class Client:
                     self.sended_data_counter = 0
                 else:
                     logger.info(f'[{self.__get_name()}]: нет новых данных для отправки')
+                await asyncio.sleep(self.__get_sleep("between_synchronize"))
                 break
-            except (ConnectionResetError, ConnectionAbortedError, ConnectionRefusedError, ConnectionError):
+            except (ConnectionResetError, ConnectionAbortedError, ConnectionRefusedError, ConnectionError, TimeoutError):
                 break
 
     def __get_folders_for_copy(self) -> list[Path]:
