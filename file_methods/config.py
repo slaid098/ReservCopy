@@ -13,8 +13,8 @@ class Config:
 
     @classmethod
     def get_value(self,
-                  section: Literal["client", "sleep", "security"],
-                  key: Literal["server_ip", "server_port", "client_name", "connection_error", "between_one_file", "between_synchronize", "key"],
+                  section: Literal["client", "sleep", "security", "server"],
+                  key: Literal["server_ip", "server_port", "client_name", "connection_error", "between_one_file", "between_synchronize", "key", 'backup_folder_path'],
                   cache: bool = True) -> str:
         """
         Get a value from a .ini file

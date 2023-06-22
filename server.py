@@ -22,7 +22,11 @@ class Server:
         self.server = None  # Объект сервера
         self.cipher_suite = Fernet(self.__get_encryption_key())
         self.ip_address = self.__get_local_ip()  # IP-адрес вашего ПК
-        self.backup_folder_path = Path("D:/BACKUP_DATA")
+        self.backup_folder_path = self.__get_backup_folder_path()
+
+    def __get_backup_folder_path(self) -> Path:
+        return Path(Config.get_value("server", "backup_folder_path"))
+        
 
     def __get_encryption_key(self) -> bytes:
         key_str = Config.get_value("security", "key")
