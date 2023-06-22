@@ -30,6 +30,9 @@ class Client:
         key_str = Config.get_value("security", "key")
         return base64.b64decode(key_str.encode('utf-8'))
 
+    def __get_index_main_folder(self) -> int:
+        return int(Config.get_value("client", "index_main_folders"))
+
     def __load_state(self) -> None:
         """
         Загружает состояние клиента из файла
@@ -105,7 +108,8 @@ class Client:
             relative_path=relative_path,
             created=folder_path.stat().st_ctime,
             changed=folder_path.stat().st_mtime,
-            client_name=self.__get_name())
+            client_name=self.__get_name(),
+            name_main_folder=folder_path.parts[self.__get_index_main_folder()])
         await self.__send_data_to_server(data=folder_obj)
         self.__add_to_state(folder_obj)
 
@@ -146,7 +150,8 @@ class Client:
                 data=file_data,
                 created=file_path.stat().st_ctime,
                 changed=file_path.stat().st_mtime,
-                client_name=self.__get_name())
+                client_name=self.__get_name(),
+                name_main_folder=file_path.parts[self.__get_index_main_folder()])
             await self.__send_data_to_server(data=file_obj)
             self.__add_to_state(file_obj)
         except FileNotFoundError as e:

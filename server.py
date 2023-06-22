@@ -39,13 +39,13 @@ class Server:
     def __get_port(self) -> int:
         return int(Config.get_value("server", "port"))
 
-    async def __handle_connection(self, client_socket: socket.socket, client_address: tuple, loop: asyncio.AbstractEventLoop):
+    async def __handle_connection(self, client_socket: socket.socket, client_address: tuple):
         logger.info(f"Подключен клиент с адресом: {client_address}")
 
         data = b''
 
         while True:
-            chank = await loop.sock_recv(client_socket, 1024)  # Считываем все доступные байты
+            chank = client_socket.recv(1024)  # Считываем все доступные байты
             if not chank:
                 break
             data += chank
@@ -56,42 +56,42 @@ class Server:
                 data_obj: Folder | File = pickle.loads(decrypted_data_bytes)
                 client_name = data_obj.client_name
                 if isinstance(data_obj, Folder):
-                    path_folder = Path(self.backup_folder_path, client_name, data_obj.relative_path)
+                    relative_path_folder = Path(self.backup_folder_path, client_name, data_obj.name_main_folder, data_obj.relative_path)
 
-                    if data_obj.delete and path_folder.exists():
+                    if data_obj.delete and relative_path_folder.exists():
                         try:
-                            shutil.rmtree(path_folder)
-                            logger.debug(f"Папка {path_folder} удалена")
+                            shutil.rmtree(relative_path_folder)
+                            logger.debug(f"Папка {relative_path_folder} удалена")
                         except PermissionError:
-                            logger.warning(f"Не удалось удалить папку {path_folder}")
+                            logger.warning(f"Не удалось удалить папку {relative_path_folder}")
 
                     else:
-                        path_folder.mkdir(parents=True, exist_ok=True)
+                        relative_path_folder.mkdir(parents=True, exist_ok=True)
                         # logger.debug(f"Папка {data_obj.name} получена от клиента {client_address}")
 
                 else:
-                    path_file_folder = Path(self.backup_folder_path, client_name, data_obj.relative_path.parent)
-                    file_path = Path(self.backup_folder_path, client_name, data_obj.relative_path)
+                    relative_path_file_folder = Path(self.backup_folder_path, client_name, data_obj.name_main_folder, data_obj.relative_path.parent)
+                    relative_file_path = Path(self.backup_folder_path, client_name, data_obj.name_main_folder, data_obj.relative_path)
 
                     if data_obj.delete:
-                        if file_path.is_file():
+                        if relative_file_path.is_file():
                             try:
-                                os.remove(file_path)
-                                logger.debug(f"Файл {file_path} удален")
+                                os.remove(relative_file_path)
+                                logger.debug(f"Файл {relative_file_path} удален")
                             except PermissionError:
-                                logger.warning(f"Не удалось удалить файл {path_folder}")
+                                logger.warning(f"Не удалось удалить файл {relative_path_folder}")
 
                     else:
-                        path_file_folder.mkdir(parents=True, exist_ok=True)
+                        relative_path_file_folder.mkdir(parents=True, exist_ok=True)
 
                         # Сохранение файла на сервере
 
                         try:
-                            with open(file_path, "wb") as f:
+                            with open(relative_file_path, "wb") as f:
                                 f.write(data_obj.data)
-                            logger.debug(f"файл {file_path} сохранен")
+                            logger.debug(f"файл {relative_file_path} сохранен")
                         except Exception as e:
-                            logger.error(f"Ошибка при сохранении файла {file_path} на сервере: {str(e)}")
+                            logger.error(f"Ошибка при сохранении файла {relative_file_path} на сервере: {str(e)}")
 
                 # logger.debug(f"Файл {data_obj.name} получен от клиента {client_address}")
             except json.JSONDecodeError as e:
@@ -117,7 +117,7 @@ class Server:
         while True:
             # client_socket, client_address = self.server_socket.accept()
             client_socket, client_address = await loop.sock_accept(self.server_socket)
-            loop.create_task(self.__handle_connection(client_socket, client_address, loop))
+            await asyncio.to_thread(self.__handle_connection(client_socket, client_address))
             # client_thread = threading.Thread(target=self.__handle_connection, args=(client_socket, client_address))
             # client_thread.start()
 

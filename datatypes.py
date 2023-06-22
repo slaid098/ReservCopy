@@ -11,6 +11,7 @@ class Folder:
     changed: float
     delete: bool = False
     client_name: str = '0'
+    name_main_folder: str = ''
 
 
 @dataclass
@@ -23,3 +24,4 @@ class File:
     changed: float
     delete: bool = False
     client_name: str = '0'
+    name_main_folder: str = ''
