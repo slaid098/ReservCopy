@@ -117,7 +117,7 @@ class Server:
         while True:
             # client_socket, client_address = self.server_socket.accept()
             client_socket, client_address = await loop.sock_accept(self.server_socket)
-            await asyncio.to_thread(self.__handle_connection(client_socket, client_address))
+            await asyncio.to_thread(self.__handle_connection, client_socket, client_address)
             # client_thread = threading.Thread(target=self.__handle_connection, args=(client_socket, client_address))
             # client_thread.start()
 
