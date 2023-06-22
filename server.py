@@ -39,13 +39,13 @@ class Server:
     def __get_port(self) -> int:
         return int(Config.get_value("server", "port"))
 
-    async def __handle_connection(self, client_socket: socket.socket, client_address: tuple):
+    async def __handle_connection(self, client_socket: socket.socket, client_address: tuple, loop: asyncio.AbstractEventLoop):
         logger.info(f"Подключен клиент с адресом: {client_address}")
 
         data = b''
 
         while True:
-            chank = client_socket.recv(1024)  # Считываем все доступные байты
+            chank = await loop.sock_recv(client_socket, 1024)  # Считываем все доступные байты
             if not chank:
                 break
             data += chank
@@ -117,7 +117,7 @@ class Server:
         while True:
             # client_socket, client_address = self.server_socket.accept()
             client_socket, client_address = await loop.sock_accept(self.server_socket)
-            loop.create_task(self.__handle_connection(client_socket, client_address))
+            loop.create_task(self.__handle_connection(client_socket, client_address, loop))
             # client_thread = threading.Thread(target=self.__handle_connection, args=(client_socket, client_address))
             # client_thread.start()
 
