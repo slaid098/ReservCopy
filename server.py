@@ -41,7 +41,6 @@ class Server:
 
     async def __handle_connection(self, client_socket: socket.socket, client_address: tuple):
         logger.info(f"Подключен клиент с адресом: {client_address}")
-        # loop = asyncio.get_running_loop()
 
         data = b''
 
@@ -55,7 +54,6 @@ class Server:
             try:
                 decrypted_data_bytes = self.cipher_suite.decrypt(data)  # расшифровка байтов
                 data_obj: Folder | File = pickle.loads(decrypted_data_bytes)
-                logger.debug(data_obj)
                 client_name = data_obj.client_name
                 if isinstance(data_obj, Folder):
                     path_folder = Path(self.backup_folder_path, client_name, data_obj.relative_path)
