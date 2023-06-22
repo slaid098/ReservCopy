@@ -2,10 +2,8 @@ import asyncio
 import pickle
 from pathlib import Path
 from typing import Literal
-import json
 import base64
 import socket
-import hashlib
 
 from loguru import logger
 from cryptography.fernet import Fernet
@@ -22,7 +20,6 @@ class Client:
         self.state_file_path = Path("app_data", "client_state")
         self.state: dict[str, Folder | File] = {}  # type: ignore
         self.__load_state()
-        # self.separator = '#'
         self.temp_path_list: list[str] = []  # type: ignore
         self.sended_data_counter = 0
         self.cipher_suite = Fernet(self.__get_encryption_key())
@@ -32,12 +29,6 @@ class Client:
     def __get_encryption_key(self) -> bytes:
         key_str = Config.get_value("security", "key")
         return base64.b64decode(key_str.encode('utf-8'))
-
-    def __calculate_hash(self, data: bytes) -> str:
-        # Вычисление хэша SHA-256
-        sha256_hash = hashlib.sha256()
-        sha256_hash.update(data)
-        return sha256_hash.hexdigest()
 
     def __load_state(self) -> None:
         """
@@ -50,23 +41,9 @@ class Client:
 
     async def connect_and_send_data(self) -> None:
         while True:
-            await self.__connect()
+            self.warn_log = True
             await self.__send_data()
-
-    async def __connect(self) -> None:
-        while True:
-            try:
-                # Подключение к серверу
-                ip, port = self.__get_server_ip(), self.__get_server_port()
-                # self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                # self.client_socket.connect((ip, port))
-                logger.info(f"[{self.__get_name()}]: подключен к {ip}:{port}")
-                self.warn_log = True
-                break
-            except ConnectionRefusedError:
-                await self.__sleep_and_message(message="Сервер недоступен.")
-            except ConnectionError:
-                await self.__sleep_and_message(message="Проблемы с соединением.")
+            await asyncio.sleep(self.__get_sleep("between_synchronize"))
 
     def __get_server_ip(self) -> str:
         return Config.get_value("client", "server_ip", cache=False)
@@ -113,9 +90,8 @@ class Client:
                     self.sended_data_counter = 0
                 else:
                     logger.info(f'[{self.__get_name()}]: нет новых данных для отправки')
-                await asyncio.sleep(self.__get_sleep("between_synchronize"))
                 break
-            except (ConnectionResetError, ConnectionAbortedError, ConnectionError):
+            except (ConnectionResetError, ConnectionAbortedError, ConnectionRefusedError, ConnectionError):
                 break
 
     def __get_folders_for_copy(self) -> list[Path]:
@@ -148,22 +124,14 @@ class Client:
 
             try:
                 ip, port = self.__get_server_ip(), self.__get_server_port()
-                # self.client_socket = socket.socket()
                 connection = socket.create_connection((ip, port))
-                # self.client_socket.connect((ip, port))
                 self.sended_data_counter += 1  # увеличиваем счётчик, если отправили какие-то файлы или папки на сервер
                 pickled_data = pickle.dumps(data)
-                # encrypted_data = self.cipher_suite.encrypt(pickled_data)  # шифруем данные
-                # base64_bytes = base64.b64encode(pickled_data)
-                # data_dict = {'data': base64_bytes.decode, 'client_name': self.__get_name()}
-                # json_data = json.dumps(data_dict)
-                connection.send(pickled_data)
+                encrypted_data = self.cipher_suite.encrypt(pickled_data)  # шифруем данные
+                connection.send(encrypted_data)
                 connection.close()
-                # self.client_socket.send(pickled_data)
-                # socket.close()
-                # self.client_socket.close()
                 logger.debug(f"отправил {data.name}")
-            except (ConnectionResetError, ConnectionAbortedError) as ex:
+            except (ConnectionResetError, ConnectionAbortedError, ConnectionRefusedError, ConnectionError) as ex:
                 await self.__sleep_and_message(message=f"Ошибка при отправке данных на сервер: {str(ex)}", error_for_raise=ex)
 
     async def __send_file(self, file_path: Path, relative_folder_path: Path) -> None:

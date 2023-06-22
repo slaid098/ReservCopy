@@ -3,12 +3,9 @@ import socket
 from pathlib import Path
 import pickle
 import json
-from typing import Literal
 import base64
 import os
 import shutil
-from datetime import datetime
-import hashlib
 
 from loguru import logger
 from cryptography.fernet import Fernet
@@ -25,16 +22,10 @@ class Server:
         self.ip_address = self.__get_local_ip()  # IP-адрес вашего ПК
         self.port = self.__get_port()
         self.backup_folder_path = self.__get_backup_folder_path()
-        self.server_socket = socket.socket()
+        self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
     def __get_backup_folder_path(self) -> Path:
         return Path(Config.get_value("server", "backup_folder_path"))
-
-    def __calculate_hash(self, data: bytes) -> str:
-        # Вычисление хэша SHA-256
-        sha256_hash = hashlib.sha256()
-        sha256_hash.update(data)
-        return sha256_hash.hexdigest()
 
     def __get_encryption_key(self) -> bytes:
         key_str = Config.get_value("security", "key")
@@ -56,32 +47,15 @@ class Server:
 
         while True:
             chank = client_socket.recv(1024)  # Считываем все доступные байты
-            # json_str = data.decode()
-            # dict_data: dict[Literal["data", "client_name"], bytes | str] = json.loads(json_str)
-            # encrypted_data_bytes = data.decode()  # Декодируем байты в строку
-            # print(json_str_data, datetime.now())
-            # print(json_str_data)
-            # json_list_str = [i for i in json_str.split("#") if i]  # Разделяем строку на словари по разделителю "#"
-            # print(dict_data)
             if not chank:
                 break
             data += chank
 
-            # Обработка полученных данных
-            # if dict_data["hash"] != self.__calculate_hash(dict_data["data"]):  # type: ignore
-            #     logger.warning("Данные поверждены")
-
         if data != b'':
             try:
-                # dict_data: dict[Literal["data", "client_name"], str] = json.loads(json_str_data)  # сериализуем строку в словарь
-                # encrypted_data_str = dict_data["data"]
-                # encrypted_data_bytes = base64.b64decode(encrypted_data_str)  # из строки в байты
-                # data_obj: Folder | File = dict_data["data"]
-                # base64_data = base64.b64decode(data)
-                data_obj: Folder | File = pickle.loads(data)
+                decrypted_data_bytes = self.cipher_suite.decrypt(data)  # расшифровка байтов
+                data_obj: Folder | File = pickle.loads(decrypted_data_bytes)
                 logger.debug(data_obj)
-                # decrypted_data_bytes = self.cipher_suite.decrypt(dict_data["data"])  # расшифровка байтов
-                # data_obj: Folder | File = pickle.loads(decrypted_data_bytes)  # байты в обьект Python
                 client_name = data_obj.client_name
                 if isinstance(data_obj, Folder):
                     path_folder = Path(self.backup_folder_path, client_name, data_obj.relative_path)
@@ -135,16 +109,15 @@ class Server:
 
     async def start(self):
         # Привязка сокета к адресу и порту
-        server = socket.create_server((self.ip_address, self.port))
-        # self.server_socket.bind((self.ip_address, self.port))
-        # # Прослушивание входящих соединений
-        # self.server_socket.listen(1)
+        self.server_socket.bind((self.ip_address, self.port))
+        # Прослушивание входящих соединений
+        self.server_socket.listen(1)
         logger.info(f"Сервер запущен на ip {self.ip_address}:{self.port}")
 
         loop = asyncio.get_running_loop()
 
         while True:
-            client_socket, client_address = server.accept()
+            # client_socket, client_address = self.server_socket.accept()
             client_socket, client_address = await loop.sock_accept(self.server_socket)
             loop.create_task(self.__handle_connection(client_socket, client_address))
             # client_thread = threading.Thread(target=self.__handle_connection, args=(client_socket, client_address))
