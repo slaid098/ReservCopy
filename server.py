@@ -53,7 +53,7 @@ class Server:
         data_with_delimiter = await reader.readuntil(separator=self.separator)
         # Удалите разделитель из данных
         data = data_with_delimiter.rstrip(self.separator)
-        logger.debug(data)
+        # logger.debug(data)
 
         try:
             decrypted_data_bytes = self.cipher_suite.decrypt(data)  # расшифровка байтов
