@@ -26,6 +26,14 @@ class Client:
         self.warn_log = True
         self.client_socket = None
         self.separator = "$"
+        self.exceptions = self.__get_exceptions_list()
+
+    def __get_exceptions_list(self) -> list[str]:
+        path = Path("app_data", "exceptions.txt")
+        if path.is_file():
+            return get_list(Path("app_data", "exceptions.txt"))
+        logger.warning(f"Не найден файл с файлами для исключения {path}")
+        return []
 
     def __get_encryption_key(self) -> bytes:
         key_str = Config.get_value("security", "key")
@@ -175,6 +183,10 @@ class Client:
         Возвращает True если текущая папка или файл уже были отправлены на сервер
         """
         absolute_path = str(data.absolute_path)
+
+        if data.name in self.exceptions:
+            return False
+
         if not self.state.get(absolute_path, False):
             return True
 
