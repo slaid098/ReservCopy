@@ -117,7 +117,8 @@ class Client:
             created=folder_path.stat().st_ctime,
             changed=folder_path.stat().st_mtime,
             client_name=self.__get_name(),
-            name_main_folder=folder_path.parts[self.__get_index_main_folder()])
+            name_main_folder=folder_path.parts[self.__get_index_main_folder()],
+            size_bytes=folder_path.stat().st_size)
         await self.__send_data_to_server(data=folder_obj)
 
         for item_path in folder_path.iterdir():
@@ -166,7 +167,8 @@ class Client:
                 created=file_path.stat().st_ctime,
                 changed=file_path.stat().st_mtime,
                 client_name=self.__get_name(),
-                name_main_folder=file_path.parts[self.__get_index_main_folder()])
+                name_main_folder=file_path.parts[self.__get_index_main_folder()],
+                size_bytes=file_path.stat().st_size)
             await self.__send_data_to_server(data=file_obj)
         except FileNotFoundError as e:
             logger.warning(f"Ошибка при отправке файла {file_path} на сервер: {str(e)}")

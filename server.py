@@ -50,10 +50,20 @@ class Server:
         client_address = writer.get_extra_info('peername')
         logger.info(f"Подключен клиент с адресом: {client_address}")
 
-        data_with_delimiter = await reader.readuntil(separator=self.separator)
-        # Удалите разделитель из данных
-        data = data_with_delimiter.rstrip(self.separator)
+        # data_with_delimiter = await reader.readuntil(separator=self.separator)
+        # # Удалите разделитель из данных
+        # data = data_with_delimiter.rstrip(self.separator)
         # logger.debug(data)
+
+        row_data = b""  # Инициализируем пустые данные
+
+        while True:
+            chunk = await reader.read(1024 * 10)  # Чтение части данных размером 1024 байта
+            row_data += chunk
+
+            if self.separator in row_data:  # Проверяем, содержится ли разделитель в данных
+                data = row_data.split(self.separator)[0]  # Разделяем данные на части с использованием разделителя
+                break
 
         try:
             decrypted_data_bytes = self.cipher_suite.decrypt(data)  # расшифровка байтов

@@ -12,6 +12,7 @@ class Folder:
     delete: bool = False
     client_name: str = '0'
     name_main_folder: str = ''
+    size_bytes: int = 0
 
 
 @dataclass
@@ -25,3 +26,4 @@ class File:
     delete: bool = False
     client_name: str = '0'
     name_main_folder: str = ''
+    size_bytes: int = 0
