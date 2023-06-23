@@ -167,9 +167,8 @@ class Client:
         """
         Обновляет состояние клиента с текущими данными, включая даты изменения файлов
         """
-        if not self.state.get(str(data.absolute_path), False):
-            self.state[str(data.absolute_path)] = data
-            save_safing_pickle(self.state_file_path, self.state)
+        self.state[str(data.absolute_path)] = data
+        save_safing_pickle(self.state_file_path, self.state)
 
     def __need_synchronize(self, data: Folder | File) -> bool:
         """
