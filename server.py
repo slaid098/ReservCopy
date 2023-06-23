@@ -69,7 +69,7 @@ class Server:
             decrypted_data_bytes = self.cipher_suite.decrypt(data)  # расшифровка байтов
             data_obj: Folder | File = pickle.loads(decrypted_data_bytes)
             client_name = data_obj.client_name
-            logger.debug(data_obj)
+            # logger.debug(data_obj)
             if isinstance(data_obj, Folder):
                 relative_path_folder = Path(self.backup_folder_path, client_name, data_obj.name_main_folder, data_obj.relative_path)
 
