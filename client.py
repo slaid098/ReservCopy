@@ -3,7 +3,7 @@ import pickle
 from pathlib import Path
 from typing import Literal
 import base64
-import socket
+import json
 
 from loguru import logger
 from cryptography.fernet import Fernet
@@ -25,6 +25,7 @@ class Client:
         self.cipher_suite = Fernet(self.__get_encryption_key())
         self.warn_log = True
         self.client_socket = None
+        self.separator = "$"
 
     def __get_encryption_key(self) -> bytes:
         key_str = Config.get_value("security", "key")
@@ -86,7 +87,6 @@ class Client:
                 for folder in folders:
                     await self.__send_folder(folder, Path(folder.name))
                 await self.__send_deleted()
-                # self.client_socket.close()
                 if self.sended_data_counter > 0:
                     logger.info(f'[{self.__get_name()}]: данные отправлены')
                     self.sended_data_counter = 0
@@ -111,7 +111,6 @@ class Client:
             client_name=self.__get_name(),
             name_main_folder=folder_path.parts[self.__get_index_main_folder()])
         await self.__send_data_to_server(data=folder_obj)
-        self.__add_to_state(folder_obj)
 
         for item_path in folder_path.iterdir():
             if item_path.is_dir():
@@ -128,13 +127,21 @@ class Client:
 
             try:
                 ip, port = self.__get_server_ip(), self.__get_server_port()
-                connection = socket.create_connection((ip, port), timeout=10)
+                reader, writer = await asyncio.open_connection(ip, port)
                 self.sended_data_counter += 1  # увеличиваем счётчик, если отправили какие-то файлы или папки на сервер
                 pickled_data = pickle.dumps(data)
                 encrypted_data = self.cipher_suite.encrypt(pickled_data)  # шифруем данные
-                connection.send(encrypted_data)
-                connection.close()
-                logger.debug(f"отправил {data.name}")
+                writer.write(encrypted_data + self.separator.encode())
+                await writer.drain()
+                logger.debug(f"Отправил серверу {data.name}")
+                response = await reader.read()  # Ожидание ответа от сервера
+                response_data = json.loads(response.decode('utf-8'))
+                if response_data['status'] == 'success':
+                    logger.debug(f"Сервер получил {data.name}")
+                    self.__add_to_state(data)
+                else:
+                    logger.warning(f"Ответ сервера по {data.name}: данные повреждены!")
+                writer.close()
             except (ConnectionResetError, ConnectionAbortedError, ConnectionRefusedError, ConnectionError, TimeoutError) as ex:
                 await self.__sleep_and_message(message=f"Ошибка при отправке данных на сервер: {str(ex)}", error_for_raise=ex)
 
@@ -153,7 +160,6 @@ class Client:
                 client_name=self.__get_name(),
                 name_main_folder=file_path.parts[self.__get_index_main_folder()])
             await self.__send_data_to_server(data=file_obj)
-            self.__add_to_state(file_obj)
         except FileNotFoundError as e:
             logger.warning(f"Ошибка при отправке файла {file_path} на сервер: {str(e)}")
 

@@ -6,6 +6,7 @@ import json
 import base64
 import os
 import shutil
+from typing import Literal
 
 from loguru import logger
 from cryptography.fernet import Fernet
@@ -23,9 +24,15 @@ class Server:
         self.port = self.__get_port()
         self.backup_folder_path = self.__get_backup_folder_path()
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.separator = "$".encode()
 
     def __get_backup_folder_path(self) -> Path:
         return Path(Config.get_value("server", "backup_folder_path"))
+
+    def __response(self, writer: asyncio.StreamWriter, status: Literal["success", "error"]) -> None:
+        response = {"status": status}
+        response_bytes = json.dumps(response).encode('utf-8')
+        writer.write(response_bytes)
 
     def __get_encryption_key(self) -> bytes:
         key_str = Config.get_value("security", "key")
@@ -39,87 +46,79 @@ class Server:
     def __get_port(self) -> int:
         return int(Config.get_value("server", "port"))
 
-    def __handle_connection(self, client_socket: socket.socket, client_address: tuple):
+    async def __handle_connection(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        client_address = writer.get_extra_info('peername')
         logger.info(f"Подключен клиент с адресом: {client_address}")
 
-        data = b''
+        data_with_delimiter = await reader.readuntil(separator=self.separator)
+        # Удалите разделитель из данных
+        data = data_with_delimiter.rstrip(self.separator)
+        logger.debug(data)
 
-        while True:
-            chank = client_socket.recv(1024)  # Считываем все доступные байты
-            if not chank:
-                break
-            data += chank
+        try:
+            decrypted_data_bytes = self.cipher_suite.decrypt(data)  # расшифровка байтов
+            data_obj: Folder | File = pickle.loads(decrypted_data_bytes)
+            client_name = data_obj.client_name
+            logger.debug(data_obj)
+            if isinstance(data_obj, Folder):
+                relative_path_folder = Path(self.backup_folder_path, client_name, data_obj.name_main_folder, data_obj.relative_path)
 
-        if data != b'':
-            try:
-                decrypted_data_bytes = self.cipher_suite.decrypt(data)  # расшифровка байтов
-                data_obj: Folder | File = pickle.loads(decrypted_data_bytes)
-                client_name = data_obj.client_name
-                if isinstance(data_obj, Folder):
-                    relative_path_folder = Path(self.backup_folder_path, client_name, data_obj.name_main_folder, data_obj.relative_path)
-
-                    if data_obj.delete and relative_path_folder.exists():
-                        try:
-                            shutil.rmtree(relative_path_folder)
-                            logger.debug(f"Папка {relative_path_folder} удалена")
-                        except PermissionError:
-                            logger.warning(f"Не удалось удалить папку {relative_path_folder}")
-
-                    else:
-                        relative_path_folder.mkdir(parents=True, exist_ok=True)
-                        # logger.debug(f"Папка {data_obj.name} получена от клиента {client_address}")
+                if data_obj.delete and relative_path_folder.exists():
+                    try:
+                        shutil.rmtree(relative_path_folder)
+                        logger.debug(f"Папка {relative_path_folder} удалена")
+                    except PermissionError:
+                        logger.warning(f"Не удалось удалить папку {relative_path_folder}")
 
                 else:
-                    relative_path_file_folder = Path(self.backup_folder_path, client_name, data_obj.name_main_folder, data_obj.relative_path.parent)
-                    relative_file_path = Path(self.backup_folder_path, client_name, data_obj.name_main_folder, data_obj.relative_path)
+                    relative_path_folder.mkdir(parents=True, exist_ok=True)
+                    # logger.debug(f"Папка {data_obj.name} получена от клиента {client_address}")
 
-                    if data_obj.delete:
-                        if relative_file_path.is_file():
-                            try:
-                                os.remove(relative_file_path)
-                                logger.debug(f"Файл {relative_file_path} удален")
-                            except PermissionError:
-                                logger.warning(f"Не удалось удалить файл {relative_path_folder}")
+            else:
+                relative_path_file_folder = Path(self.backup_folder_path, client_name, data_obj.name_main_folder, data_obj.relative_path.parent)
+                relative_file_path = Path(self.backup_folder_path, client_name, data_obj.name_main_folder, data_obj.relative_path)
 
-                    else:
-                        relative_path_file_folder.mkdir(parents=True, exist_ok=True)
-
-                        # Сохранение файла на сервере
-
+                if data_obj.delete:
+                    if relative_file_path.is_file():
                         try:
-                            with open(relative_file_path, "wb") as f:
-                                f.write(data_obj.data)
-                            logger.debug(f"файл {relative_file_path} сохранен")
-                        except Exception as e:
-                            logger.error(f"Ошибка при сохранении файла {relative_file_path} на сервере: {str(e)}")
+                            os.remove(relative_file_path)
+                            logger.debug(f"Файл {relative_file_path} удален")
+                        except PermissionError:
+                            logger.warning(f"Не удалось удалить файл {relative_path_folder}")
 
-                # logger.debug(f"Файл {data_obj.name} получен от клиента {client_address}")
-            except json.JSONDecodeError as e:
-                logger.error(f"Ошибка при декодировании JSON данных от клиента {client_address}: {str(e)}")
-            except KeyError as e:
-                logger.error(f"Неверный формат данных от клиента {client_address}: отсутствует ключ {str(e)}")
-            except Exception as ex:
-                logger.error(f"{type(ex)} {ex}")
+                else:
+                    relative_path_file_folder.mkdir(parents=True, exist_ok=True)
 
-            logger.info(f"Прием данных от {client_address} завершен")
+                    # Сохранение файла на сервере
 
-        client_socket.close()
+                    try:
+                        with open(relative_file_path, "wb") as f:
+                            f.write(data_obj.data)
+                        logger.debug(f"файл {relative_file_path} сохранен")
+                    except Exception as e:
+                        logger.error(f"Ошибка при сохранении файла {relative_file_path} на сервере: {str(e)}")
+
+            # logger.debug(f"Файл {data_obj.name} получен от клиента {client_address}")
+            self.__response(writer, "success")
+        except json.JSONDecodeError as e:
+            self.__response(writer, "error")
+            logger.error(f"Ошибка при декодировании JSON данных от клиента {client_address}: {str(e)}")
+        except KeyError as e:
+            self.__response(writer, "error")
+            logger.error(f"Неверный формат данных от клиента {client_address}: отсутствует ключ {str(e)}")
+        except Exception as ex:
+            self.__response(writer, "error")
+            logger.error(f"{type(ex)} {ex}")
+
+        logger.info(f"Прием данных от {client_address} завершен")
+
+        writer.close()
 
     async def start(self):
-        # Привязка сокета к адресу и порту
-        self.server_socket.bind((self.ip_address, self.port))
-        # Прослушивание входящих соединений
-        self.server_socket.listen(1)
+        server = await asyncio.start_server(self.__handle_connection, self.ip_address, self.port)
         logger.info(f"Сервер запущен на ip {self.ip_address}:{self.port}")
-
-        loop = asyncio.get_running_loop()
-
-        while True:
-            # client_socket, client_address = self.server_socket.accept()
-            client_socket, client_address = await loop.sock_accept(self.server_socket)
-            await asyncio.to_thread(self.__handle_connection, client_socket, client_address)
-            # client_thread = threading.Thread(target=self.__handle_connection, args=(client_socket, client_address))
-            # client_thread.start()
+        async with server:
+            await server.serve_forever()
 
 
 if __name__ == "__main__":
